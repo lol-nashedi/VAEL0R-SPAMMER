@@ -1,0 +1,651 @@
+local Players = game:GetService("Players")
+local CoreGui = game:GetService("CoreGui")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TextChatService = game:GetService("TextChatService")
+local TweenService = game:GetService("TweenService")
+local StarterGui = game:GetService("StarterGui")
+local localPlayer = Players.LocalPlayer
+
+-- Safe GUI container
+local guiParent = nil
+pcall(function()
+    if syn and syn.protect_gui then
+        local gui = Instance.new("ScreenGui")
+        syn.protect_gui(gui)
+        guiParent = gui
+    elseif gethui then
+        guiParent = gethui()
+    else
+        guiParent = CoreGui
+    end
+end)
+if not guiParent then guiParent = localPlayer:WaitForChild("PlayerGui") end
+
+if guiParent:FindFirstChild("Vælorv0SystemGui") then guiParent.SonicV2SystemGui:Destroy() end
+if guiParent:FindFirstChild("VælorLoadingGui") then guiParent.SonicLoadingGui:Destroy() end
+if guiParent:FindFirstChild("VælorToggleGui") then guiParent.SonicToggleGui:Destroy() end
+
+-- Red RGB Glow Color Loop
+local redRgbColor = Color3.fromRGB(255, 0, 0)
+task.spawn(function()
+    while true do
+        pcall(function()
+            -- Red to Pink/Orange smooth transition for RGB red glow
+            for h = 0, 0.15, 0.002 do
+                redRgbColor = Color3.fromHSV(h, 1, 1)
+                task.wait(0.03)
+            end
+            for h = 0.15, 0, -0.002 do
+                redRgbColor = Color3.fromHSV(h, 1, 1)
+                task.wait(0.03)
+            end
+        end)
+        task.wait()
+    end
+end)
+
+-- Chat Sender
+local function sendMessage(messageText)
+    pcall(function()
+        if TextChatService.ChatInputBarConfiguration.TargetTextChannel then
+            TextChatService.ChatInputBarConfiguration.TargetTextChannel:SendAsync(messageText)
+        end
+    end)
+    pcall(function()
+        local chatRemote = ReplicatedStorage:FindFirstChild("DefaultChatSystemChatEvents")
+        if chatRemote and chatRemote:FindFirstChild("SayMessageRequest") then
+            chatRemote.SayMessageRequest:FireServer(messageText, "All")
+        end
+    end)
+end
+
+local function truncate_chars(s, max_chars)
+    local n = utf8.len(s)
+    if not n or n <= max_chars then return s end
+    local byte_end = utf8.offset(s, max_chars + 1)
+    if not byte_end then return s end
+    return s:sub(1, byte_end - 1)
+end
+
+-- ==========================================
+-- 1. BROOKHAVEN RP NAME + SUB NAME + VIP GLOW
+-- ==========================================
+local NEW_RP_NAME = "ᴠÆʟᴏʀ ᴠ0 (ᴀɴᴛɪ ᴛᴀᴍᴩᴇʀ💣)"
+local NEW_SUB_NAME = ""
+local RE = ReplicatedStorage:WaitForChild("RE", 10)
+if not RE then RE = ReplicatedStorage:FindFirstChild("RE") or ReplicatedStorage:FindFirstChild("Remotes") end
+
+local nameRemote = nil
+local colorRemote = nil
+if RE then
+    nameRemote = RE:FindFirstChild("1RPNam1eTex1t") or RE:FindFirstChild("RPNameText") or RE:FindFirstChild("1RPNameText")
+    colorRemote = RE:FindFirstChild("1RPNam1eColo1r") or RE:FindFirstChild("RPNameColor") or RE:FindFirstChild("1RPNameColor")
+end
+
+local function applyRPName()
+    if not nameRemote then return end
+    pcall(function() nameRemote:FireServer("RolePlayName", NEW_RP_NAME) end)
+    pcall(function() nameRemote:FireServer(NEW_RP_NAME) end)
+end
+
+local function applyRPColor()
+    if not colorRemote then return end
+    local c = redRgbColor
+    pcall(function() colorRemote:FireServer("PickingRPNameColor", c) end)
+    pcall(function() colorRemote:FireServer(c) end)
+    pcall(function() colorRemote:FireServer(c.R, c.G, c.B) end)
+end
+
+-- VIP Glow for Billboards
+local VIP_Gradient = ColorSequence.new{
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 0, 0)),
+    ColorSequenceKeypoint.new(0.5, Color3.fromRGB(150, 0, 0)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 50, 50))
+}
+
+local function apply_vip_glow(label)
+    for _, v in ipairs(label:GetChildren()) do
+        if v:IsA("UIStroke") or v:IsA("UIGradient") then v:Destroy() end
+    end
+    label.TextColor3 = Color3.new(1, 1, 1)
+    label.TextStrokeTransparency = 1
+    
+    local stroke = Instance.new("UIStroke")
+    stroke.Thickness = 3
+    stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
+    stroke.Parent = label
+
+    local grad = Instance.new("UIGradient")
+    local stroke_grad = Instance.new("UIGradient")
+    
+    grad.Color = VIP_Gradient
+    stroke_grad.Color = VIP_Gradient
+    grad.Parent = label
+    stroke_grad.Parent = stroke
+
+    task.spawn(function()
+        while label.Parent do
+            local off = (tick() % 2) / 2
+            grad.Offset = Vector2.new(off, 0)
+            stroke_grad.Offset = Vector2.new(off, 0)
+            task.wait(0.03)
+        end
+    end)
+end
+
+local function update_tags()
+    local char = localPlayer.Character or localPlayer.CharacterAdded:Wait()
+    local head = char:WaitForChild("Head", 10)
+    if not head then return end
+    task.wait(1)
+    
+    for _, bgui in ipairs(head:GetChildren()) do
+        if bgui:IsA("BillboardGui") then
+            local text_labels = {}
+            for _, obj in ipairs(bgui:GetDescendants()) do
+                if obj:IsA("TextLabel") then table.insert(text_labels, obj) end
+            end
+            
+            table.sort(text_labels, function(a, b) return a.AbsolutePosition.Y < b.AbsolutePosition.Y end)
+            
+            if text_labels[1] then
+                text_labels[1].Text = NEW_RP_NAME
+                apply_vip_glow(text_labels[1])
+            end
+            if text_labels[2] then
+                text_labels[2].Text = NEW_SUB_NAME
+                apply_vip_glow(text_labels[2])
+            end
+        end
+    end
+end
+
+task.spawn(function()
+    task.wait(1.5)
+    -- First chat message on execution as requested
+    pcall(function() sendMessage("[ ＶÆＬＯＲ ＳＰＡＭＭＥＲ ＬＯＡＤＥＤ 🗿]") end)
+    applyRPName()
+    applyRPColor()
+    pcall(update_tags)
+    while true do
+        pcall(function()
+            applyRPName()
+            applyRPColor()
+        end)
+        task.wait(0.4)
+    end
+end)
+localPlayer.CharacterAdded:Connect(function() task.wait(1.5) pcall(update_tags) end)
+
+-- ==========================================
+-- 2. RED THEME LOADING SCREEN + SONG 6070263388
+-- ==========================================
+local LoadingGui = Instance.new("ScreenGui")
+LoadingGui.Name = "VælorLoadingGui"
+LoadingGui.Parent = guiParent
+LoadingGui.ResetOnSpawn = false
+LoadingGui.IgnoreGuiInset = true
+LoadingGui.DisplayOrder = 999
+
+-- User requested song ID 6070263388
+local loadSound = Instance.new("Sound")
+loadSound.SoundId = "rbxassetid://6070263388"
+loadSound.Volume = 2
+loadSound.Looped = true
+loadSound.Parent = LoadingGui
+task.delay(0.2, function() pcall(function() loadSound:Play() end) end)
+
+local LoadFrame = Instance.new("Frame")
+LoadFrame.Parent = LoadingGui
+LoadFrame.BackgroundColor3 = Color3.fromRGB(15, 5, 5) -- Reddish Dark Background
+LoadFrame.BorderSizePixel = 0
+LoadFrame.Size = UDim2.new(1, 0, 1, 0) 
+LoadFrame.Position = UDim2.new(0, 0, 0, 0)
+
+local LoadStroke = Instance.new("UIStroke")
+LoadStroke.Parent = LoadFrame
+LoadStroke.Thickness = 4
+
+task.spawn(function()
+    while LoadingGui.Parent do
+        LoadStroke.Color = redRgbColor
+        task.wait(0.03)
+    end
+end)
+
+local LoadTitle = Instance.new("TextLabel")
+LoadTitle.Parent = LoadFrame
+LoadTitle.BackgroundTransparency = 1
+LoadTitle.Position = UDim2.new(0, 0, 0.4, -40)
+LoadTitle.Size = UDim2.new(1, 0, 0, 40)
+LoadTitle.Font = Enum.Font.GothamBlack
+LoadTitle.Text = "ᴠÆʟᴏʀ ᴠ2"
+LoadTitle.TextColor3 = Color3.fromRGB(255, 50, 50)
+LoadTitle.TextSize = 32
+
+local LoadStatus = Instance.new("TextLabel")
+LoadStatus.Parent = LoadFrame
+LoadStatus.BackgroundTransparency = 1
+LoadStatus.Position = UDim2.new(0, 0, 0.4, 10)
+LoadStatus.Size = UDim2.new(1, 0, 0, 25)
+LoadStatus.Font = Enum.Font.GothamMedium
+LoadStatus.Text = "ᴛʜᴇ ʙᴇᴀꜱᴛ ɪꜱ ᴜɴʟᴇᴀꜱʜɪɴɢ ɪᴛꜱ ᴛʀᴜᴇ ᴘᴏᴛᴇɴᴛɪᴀʟ..."
+LoadStatus.TextColor3 = Color3.fromRGB(220, 150, 150)
+LoadStatus.TextSize = 14
+
+local BarBg = Instance.new("Frame")
+BarBg.Parent = LoadFrame
+BarBg.BackgroundColor3 = Color3.fromRGB(40, 15, 15)
+BarBg.BorderSizePixel = 0
+BarBg.Position = UDim2.new(0.5, -150, 0.4, 50)
+BarBg.Size = UDim2.new(0, 300, 0, 15)
+
+local BarBgCorner = Instance.new("UICorner")
+BarBgCorner.CornerRadius = UDim.new(0, 6)
+BarBgCorner.Parent = BarBg
+
+local BarFill = Instance.new("Frame")
+BarFill.Parent = BarBg
+BarFill.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+BarFill.BorderSizePixel = 0
+BarFill.Size = UDim2.new(0, 0, 1, 0)
+
+local BarFillCorner = Instance.new("UICorner")
+BarFillCorner.CornerRadius = UDim.new(0, 6)
+BarFillCorner.Parent = BarFill
+
+TweenService:Create(BarFill, TweenInfo.new(1.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Size = UDim2.new(1, 0, 1, 0)}):Play()
+task.wait(1.6)
+LoadStatus.Text = "Loaded Successfully!"
+task.wait(0.4)
+
+local fadeTween = TweenService:Create(LoadFrame, TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 1})
+fadeTween:Play()
+
+for _, obj in ipairs(LoadFrame:GetDescendants()) do
+    if obj:IsA("TextLabel") then
+        TweenService:Create(obj, TweenInfo.new(0.5), {TextTransparency = 1}):Play()
+    elseif obj:IsA("Frame") then
+        TweenService:Create(obj, TweenInfo.new(0.5), {BackgroundTransparency = 1}):Play()
+    elseif obj:IsA("UIStroke") then
+        obj.Transparency = 1
+    end
+end
+
+task.wait(0.5)
+pcall(function() loadSound:Stop() end)
+LoadingGui:Destroy()
+
+-- NOTIFICATION ON LOAD
+pcall(function()
+    StarterGui:SetCore("SendNotification", {
+        Title = "ᴠÆʟᴏʀ",
+        Text = "[ ＶÆＬＯＲ ＳＰＡＭＭＥＲ ＬＯＡＤＥＤ 🗿 ]",
+        Duration = 5
+    })
+end)
+
+-- ==========================================
+-- 3. MAIN RED GUI PANEL
+-- ==========================================
+local SonicV2SystemGui = Instance.new("ScreenGui")
+SonicV2SystemGui.Name = "VælorV0SystemGui"
+SonicV2SystemGui.Parent = guiParent
+SonicV2SystemGui.ResetOnSpawn = false
+
+local MainFrame = Instance.new("Frame")
+MainFrame.Parent = SonicV2SystemGui
+MainFrame.BackgroundColor3 = Color3.fromRGB(18, 10, 12) -- Reddish Dark Theme
+MainFrame.BorderSizePixel = 0
+MainFrame.Position = UDim2.new(0.18, 0, 0.22, 0)
+MainFrame.Size = UDim2.new(0, 560, 0, 280)
+MainFrame.Active = true
+MainFrame.Draggable = true
+
+local UICorner = Instance.new("UICorner")
+UICorner.CornerRadius = UDim.new(0, 10)
+UICorner.Parent = MainFrame
+
+local RainbowStroke = Instance.new("UIStroke")
+RainbowStroke.Parent = MainFrame
+RainbowStroke.Thickness = 3.0
+
+-- Bind Main Frame Stroke to Red RGB Glow
+task.spawn(function()
+    while SonicV2SystemGui.Parent do
+        RainbowStroke.Color = redRgbColor
+        task.wait(0.03)
+    end
+end)
+
+-- Left Panel
+local LeftPanel = Instance.new("Frame")
+LeftPanel.Parent = MainFrame
+LeftPanel.BackgroundColor3 = Color3.fromRGB(25, 15, 18)
+LeftPanel.BorderSizePixel = 0
+LeftPanel.Position = UDim2.new(0.03, 0, 0.08, 0)
+LeftPanel.Size = UDim2.new(0, 150, 0, 240)
+
+local LeftCorner = Instance.new("UICorner")
+LeftCorner.CornerRadius = UDim.new(0, 8)
+LeftCorner.Parent = LeftPanel
+
+local NumLabel = Instance.new("TextLabel")
+NumLabel.Parent = LeftPanel
+NumLabel.BackgroundColor3 = Color3.fromRGB(35, 20, 22)
+NumLabel.Position = UDim2.new(0.1, 0, 0.05, 0)
+NumLabel.Size = UDim2.new(0.8, 0, 0, 30)
+NumLabel.Font = Enum.Font.GothamBold
+NumLabel.Text = "0"
+NumLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+NumLabel.TextSize = 15
+local NLCorner = Instance.new("UICorner")
+NLCorner.CornerRadius = UDim.new(0, 6)
+NLCorner.Parent = NumLabel
+
+-- Pattern Toggles
+local AtBtn = Instance.new("TextButton")
+AtBtn.Parent = LeftPanel
+AtBtn.BackgroundColor3 = Color3.fromRGB(35, 20, 22)
+AtBtn.Position = UDim2.new(0.1, 0, 0.18, 0)
+AtBtn.Size = UDim2.new(0.8, 0, 0, 28)
+AtBtn.Font = Enum.Font.GothamBold
+AtBtn.Text = "PATTERN: [@] OFF"
+AtBtn.TextColor3 = Color3.fromRGB(255, 80, 80)
+AtBtn.TextSize = 11
+local AtBtnCorner = Instance.new("UICorner")
+AtBtnCorner.CornerRadius = UDim.new(0, 6)
+AtBtnCorner.Parent = AtBtn
+
+local SlashBtn = Instance.new("TextButton")
+SlashBtn.Parent = LeftPanel
+SlashBtn.BackgroundColor3 = Color3.fromRGB(35, 20, 22)
+SlashBtn.Position = UDim2.new(0.1, 0, 0.32, 0)
+SlashBtn.Size = UDim2.new(0.8, 0, 0, 28)
+SlashBtn.Font = Enum.Font.GothamBold
+SlashBtn.Text = "PATTERN: /// OFF"
+SlashBtn.TextColor3 = Color3.fromRGB(255, 80, 80)
+SlashBtn.TextSize = 11
+local SlashBtnCorner = Instance.new("UICorner")
+SlashBtnCorner.CornerRadius = UDim.new(0, 6)
+SlashBtnCorner.Parent = SlashBtn
+
+local NewBtn = Instance.new("TextButton")
+NewBtn.Parent = LeftPanel
+NewBtn.BackgroundColor3 = Color3.fromRGB(35, 20, 22)
+NewBtn.Position = UDim2.new(0.1, 0, 0.46, 0)
+NewBtn.Size = UDim2.new(0.8, 0, 0, 28)
+NewBtn.Font = Enum.Font.GothamBold
+NewBtn.Text = "PATTERN: [+++] OFF"
+NewBtn.TextColor3 = Color3.fromRGB(255, 80, 80)
+NewBtn.TextSize = 11
+local NewBtnCorner = Instance.new("UICorner")
+NewBtnCorner.CornerRadius = UDim.new(0, 6)
+NewBtnCorner.Parent = NewBtn
+
+local EmojiBtn = Instance.new("TextButton")
+EmojiBtn.Parent = LeftPanel
+EmojiBtn.BackgroundColor3 = Color3.fromRGB(35, 20, 22)
+EmojiBtn.Position = UDim2.new(0.1, 0, 0.60, 0)
+EmojiBtn.Size = UDim2.new(0.8, 0, 0, 28)
+EmojiBtn.Font = Enum.Font.GothamBold
+EmojiBtn.Text = "EMOJI: OFF"
+EmojiBtn.TextColor3 = Color3.fromRGB(255, 80, 80)
+EmojiBtn.TextSize = 11
+local EBCorner = Instance.new("UICorner")
+EBCorner.CornerRadius = UDim.new(0, 6)
+EBCorner.Parent = EmojiBtn
+
+local TitleLabel = Instance.new("TextLabel")
+TitleLabel.Parent = MainFrame
+TitleLabel.BackgroundTransparency = 1
+TitleLabel.Position = UDim2.new(0.31, 0, 0.05, 0)
+TitleLabel.Size = UDim2.new(0.66, 0, 0, 25)
+TitleLabel.Font = Enum.Font.GothamBold
+TitleLabel.Text = "⚡ ᴠÆʟᴏʀ ᴠ0 // RED CORE"
+TitleLabel.TextColor3 = Color3.fromRGB(255, 80, 80)
+TitleLabel.TextSize = 12
+
+local targetInputBoxes = {}
+local defaultTargetNames = {"TARGET1", "TARGET2", "TARGET3", "TARGET4"}
+
+for i = 1, 4 do
+    local row = math.floor((i - 1) / 2)
+    local col = (i - 1) % 2
+    local tBox = Instance.new("TextBox")
+    tBox.Parent = MainFrame
+    tBox.BackgroundColor3 = Color3.fromRGB(30, 15, 18)
+    tBox.Position = UDim2.new(0.31 + (col * 0.28), 0, 0.18 + (row * 0.22), 0)
+    tBox.Size = UDim2.new(0.26, 0, 0, 42)
+    tBox.Font = Enum.Font.GothamBold
+    tBox.Text = defaultTargetNames[i]
+    tBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+    tBox.TextSize = 12
+    local tCorner = Instance.new("UICorner")
+    tCorner.CornerRadius = UDim.new(0, 6)
+    tCorner.Parent = tBox
+    table.insert(targetInputBoxes, tBox)
+end
+
+local DelayTitle = Instance.new("TextLabel")
+DelayTitle.Parent = MainFrame
+DelayTitle.BackgroundTransparency = 1
+DelayTitle.Position = UDim2.new(0.85, 0, 0.15, 0)
+DelayTitle.Size = UDim2.new(0.12, 0, 0, 16)
+DelayTitle.Font = Enum.Font.GothamBold
+DelayTitle.Text = "DELAY"
+DelayTitle.TextColor3 = Color3.fromRGB(200, 150, 150)
+DelayTitle.TextSize = 9
+
+local RuntimeDelayBox = Instance.new("TextBox")
+RuntimeDelayBox.Parent = MainFrame
+RuntimeDelayBox.BackgroundColor3 = Color3.fromRGB(40, 20, 25)
+RuntimeDelayBox.Position = UDim2.new(0.85, 0, 0.23, 0)
+RuntimeDelayBox.Size = UDim2.new(0.12, 0, 0, 92)
+RuntimeDelayBox.Font = Enum.Font.GothamBold
+RuntimeDelayBox.Text = "0.8"
+RuntimeDelayBox.TextColor3 = Color3.fromRGB(255, 100, 100)
+RuntimeDelayBox.TextSize = 16
+
+local RDCorner = Instance.new("UICorner")
+RDCorner.CornerRadius = UDim.new(0, 6)
+RDCorner.Parent = RuntimeDelayBox
+
+local ToggleButton = Instance.new("TextButton")
+ToggleButton.Parent = MainFrame
+ToggleButton.BackgroundColor3 = Color3.fromRGB(180, 30, 30)
+ToggleButton.Position = UDim2.new(0.31, 0, 0.70, 0)
+ToggleButton.Size = UDim2.new(0.66, 0, 0, 42)
+ToggleButton.Font = Enum.Font.GothamBold
+ToggleButton.Text = "START ᴠÆʟᴏʀ SPAMMER"
+ToggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+ToggleButton.TextSize = 14
+
+local TBCorner = Instance.new("UICorner")
+TBCorner.CornerRadius = UDim.new(0, 8)
+TBCorner.Parent = ToggleButton
+
+-- Floating Toggle Button
+local ToggleGui = Instance.new("ScreenGui")
+ToggleGui.Name = "VælorToggleGui"
+ToggleGui.Parent = guiParent
+ToggleGui.ResetOnSpawn = false
+ToggleGui.DisplayOrder = 1000
+
+local FloatingBtn = Instance.new("TextButton")
+FloatingBtn.Parent = ToggleGui
+FloatingBtn.Size = UDim2.new(0, 50, 0, 50)
+FloatingBtn.Position = UDim2.new(0, 20, 0.5, -25)
+FloatingBtn.BackgroundColor3 = Color3.fromRGB(25, 15, 18)
+FloatingBtn.Text = "⚡"
+FloatingBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+FloatingBtn.TextSize = 24
+FloatingBtn.Font = Enum.Font.GothamBold
+FloatingBtn.AutoButtonColor = false
+
+local FloatingCorner = Instance.new("UICorner")
+FloatingCorner.CornerRadius = UDim.new(1, 0)
+FloatingCorner.Parent = FloatingBtn
+
+local FloatingStroke = Instance.new("UIStroke")
+FloatingStroke.Parent = FloatingBtn
+FloatingStroke.Thickness = 3
+
+task.spawn(function()
+    while ToggleGui.Parent do
+        FloatingStroke.Color = redRgbColor
+        task.wait(0.03)
+    end
+end)
+
+local uiVisible = true
+FloatingBtn.MouseButton1Click:Connect(function()
+    uiVisible = not uiVisible
+    MainFrame.Visible = uiVisible
+end)
+
+-- ==========================================
+-- 4. SPAM LOGIC
+-- ==========================================
+local emojiOn = false
+local useAtPattern = false 
+local useSlashPattern = false 
+local useNewPattern = false 
+
+EmojiBtn.MouseButton1Click:Connect(function()
+    emojiOn = not emojiOn
+    if emojiOn then
+        EmojiBtn.Text = "EMOJI: ON"
+        EmojiBtn.TextColor3 = Color3.fromRGB(0, 255, 100)
+    else
+        EmojiBtn.Text = "EMOJI: OFF"
+        EmojiBtn.TextColor3 = Color3.fromRGB(255, 80, 80)
+    end
+end)
+
+local function resetAllPatterns()
+    useAtPattern = false
+    useSlashPattern = false
+    useNewPattern = false
+    
+    AtBtn.Text = "PATTERN: [@] OFF"
+    AtBtn.TextColor3 = Color3.fromRGB(255, 80, 80)
+    
+    SlashBtn.Text = "PATTERN: /// OFF"
+    SlashBtn.TextColor3 = Color3.fromRGB(255, 80, 80)
+    
+    NewBtn.Text = "PATTERN: [+++] OFF"
+    NewBtn.TextColor3 = Color3.fromRGB(255, 80, 80)
+end
+
+AtBtn.MouseButton1Click:Connect(function()
+    resetAllPatterns()
+    useAtPattern = true
+    AtBtn.Text = "PATTERN: [@] ON"
+    AtBtn.TextColor3 = Color3.fromRGB(0, 255, 100)
+end)
+
+SlashBtn.MouseButton1Click:Connect(function()
+    resetAllPatterns()
+    useSlashPattern = true
+    SlashBtn.Text = "PATTERN: /// ON"
+    SlashBtn.TextColor3 = Color3.fromRGB(0, 255, 100)
+end)
+
+NewBtn.MouseButton1Click:Connect(function()
+    resetAllPatterns()
+    useNewPattern = true
+    NewBtn.Text = "PATTERN: [+++] ON"
+    NewBtn.TextColor3 = Color3.fromRGB(0, 255, 100)
+end)
+
+local fixedSpamTexts = {
+    "NOVA HYPER VOID WORM VOID WAVE POWER FUN FACT VOID WORM",
+    "HYPER DARK POWER VOID WORM HYPER GODZILLA SPELL WAVE FRAUD",
+    "FUN FACT DARK POWER VOID WORM NOVA POWER WAVE",
+    "HYPER POWER POWER FACT VOID WORM HYPER GODZILLA SPELL"
+}
+
+local safeEmojiList = {"🔥", "⚡", "⭐", "💎", "👑", "🚀", "💥"}
+
+local bigAtPattern = "[" .. string.rep("@", 120) .. "]"
+local slashPattern = [==[[///==//\\\==\\\///==\\\\\\==\\\///==//\\\==\\\///==//\\\==\\\///==//\\\==\\\///==//\\\==\\\///==//\\\==\\\///==//\\\==\\\///==//\\\==\\\///==//\\\==\\\///==//\\\==\\\///==//\\\==\\\///==//\\\==\\\///==//\\\==\\\///==//\\\==\\\\\\==\\\///==//\\\==\\\///==//\\\==\\\///==//\\\==\\\///==//\\\==\\\\\\==\\\///==//\\\==\\\///==//\\\==\\\///==//\\\==\\\///==//]]==]
+local newCustomPattern = [==[[+++---+++//===//===\\\\-+++---+++//===//===\\\\+++---+++//===//===\\\\+++---+++//===//===\\\\+++---+++//===//===\\\\+++---+++//===//===\\\\+++---+++//===//===\\\\+++---+++//===//===\\\\+++---+++//===//===\\\]]==]
+
+local function buildSafeMessage(pat, target, fixedText, emoji)
+    local suffix = " [ " .. target .. " ] " .. fixedText .. emoji
+    local suffix_len = utf8.len(suffix) or #suffix
+    local max_pat_len = 195 - suffix_len
+    if max_pat_len < 10 then max_pat_len = 10 end
+    
+    local safe_pat = truncate_chars(pat, max_pat_len)
+    return safe_pat .. suffix
+end
+
+local isSpamming = false
+local textIndex = 1
+local targetIndex = 1
+local counter = 0
+
+local function startSpamLoop()
+    task.spawn(function()
+        while isSpamming do
+            pcall(function()
+                if not useAtPattern and not useSlashPattern and not useNewPattern then
+                    task.wait(0.5)
+                    return
+                end
+
+                local delay = tonumber(RuntimeDelayBox.Text) or 0.8
+                if delay < 0.1 then delay = 0.1 end
+
+                local activeTargets = {}
+                for _, box in ipairs(targetInputBoxes) do
+                    if box.Text ~= "" then table.insert(activeTargets, box.Text) end
+                end
+                if #activeTargets == 0 then activeTargets = {"TARGET"} end
+
+                if targetIndex > #activeTargets then targetIndex = 1 end
+                local currentTarget = activeTargets[targetIndex]
+                
+                counter = counter + 1
+                NumLabel.Text = tostring(counter)
+
+                local extraEmoji = ""
+                if emojiOn then
+                    extraEmoji = " " .. safeEmojiList[math.random(1, #safeEmojiList)]
+                end
+                
+                local currentFixedText = fixedSpamTexts[textIndex]
+
+                if useAtPattern then
+                    sendMessage(buildSafeMessage(bigAtPattern, currentTarget, currentFixedText, extraEmoji))
+                elseif useSlashPattern then
+                    sendMessage(buildSafeMessage(slashPattern, currentTarget, currentFixedText, extraEmoji))
+                elseif useNewPattern then
+                    sendMessage(buildSafeMessage(newCustomPattern, currentTarget, currentFixedText, extraEmoji))
+                end
+
+                textIndex = textIndex + 1
+                if textIndex > #fixedSpamTexts then textIndex = 1 end
+                
+                targetIndex = targetIndex + 1
+                if targetIndex > #activeTargets then targetIndex = 1 end
+                
+                task.wait(delay)
+            end)
+        end
+    end)
+end
+
+ToggleButton.MouseButton1Click:Connect(function()
+    isSpamming = not isSpamming
+    if isSpamming then
+        ToggleButton.Text = "TERMINATE SYSTEM"
+        ToggleButton.BackgroundColor3 = Color3.fromRGB(200, 30, 30)
+        startSpamLoop()
+    else
+        ToggleButton.Text = "START ᴠÆʟᴏʀ SPAMMER"
+        ToggleButton.BackgroundColor3 = Color3.fromRGB(180, 30, 30)
+    end
+end)
